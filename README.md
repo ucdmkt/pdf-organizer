@@ -181,4 +181,3 @@ To set up the development environment with testing and linting tools:
     *   `analyzer.py`: Logic for analyzing and moving single files.
     *   `indexer.py`: Batch indexing logic.
     *   `utils/`: Helper modules for DB, GenAI, and logging.
-*   `hybrid_semantic_db/`: Local ChromaDB storage (auto-generated).
