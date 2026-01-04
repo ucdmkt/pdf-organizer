@@ -46,7 +46,7 @@ class AppConfig(BaseModel):
         ),
     )
     retrieval_blocklist: List[str] = Field(
-        default=[],
+        default=["unconfident/**"],
         description=(
             "Glob patterns to exclude from being used as context "
             "(automatically includes index_blocklist)"
