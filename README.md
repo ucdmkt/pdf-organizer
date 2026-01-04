@@ -9,7 +9,7 @@ This project employs a hybrid approach:
 
 ## Features
 
-*   **Smart Filing**: AI-powered suggestions for folder paths and filenames.
+*   **Smart Filing**: AI-powered suggestions to **rename and move** files from your inbox/downloads to their ideal location within your document library.
 *   **Hash-Based Caching**: Avoids redundant OCR and API calls for already-processed files.
 *   **Iterative Retrieval**: Automatically expands search context to find valid examples, ignoring missing or blocklisted files.
 *   **Idempotent Indexing**: Handles moved files gracefully by updating metadata instead of creating duplicates.
@@ -117,16 +117,16 @@ Common settings to override:
 
 ### 1. Analyzer (File Organizer)
 
-Analyze a new PDF and get a suggestion on where to move it.
+Analyze a new PDF to determine its ideal location. The tool will propose a **new filename** and **subdirectory** within your configured document library (`docs_base_dir`) based on the file's content and your existing catalog.
 
 ```bash
 # Analyze a single file
 python -m pdforganizer.analyzer --file /path/to/downloaded/invoice.pdf
 
-# Auto-apply changes if confidence > 99%
+# Auto-apply changes if confidence is high enough
 python -m pdforganizer.analyzer --file /path/to/doc.pdf --auto-apply
 
-# Appply changes interactively
+# Apply changes interactively
 python -m pdforganizer.analyzer --file /path/to/doc.pdf --apply
 ```
 
