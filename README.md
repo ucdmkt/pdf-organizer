@@ -69,8 +69,8 @@ We recommend using `uv` for managing the environment.
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/your-username/pdf-indexer.git
-    cd pdf-indexer
+    git clone https://github.com/ucdmkt/pdf-organizer.git
+    cd pdf-organizer
     ```
 
 2.  **Set up the environment**:
