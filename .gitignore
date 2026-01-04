@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Distribution / Packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# IDE Settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project Specific
+obsolete/
+
+# Deployment Specific
+hybrid_semantic_db/
+batch_state.json
+config.yaml
+.env
+
+# Logs and specific outputs might be good to ignore if they occur in root
+*.log

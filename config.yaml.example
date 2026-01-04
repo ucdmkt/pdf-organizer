@@ -1,0 +1,53 @@
+# pdforganizer Configuration Template
+# Copy this file to `config.yaml` or `~/.config/pdforganizer/config.yaml`.
+
+# --- API Keys ---
+# google_api_key: "YOUR_API_KEY"
+# Recommended: Leave this commented out and use the GOOGLE_API_KEY environment variable.
+
+# --- Models ---
+# The Gemini model ID to use for OCR (image-to-text).
+ocr_model_id: "models/gemini-2.5-flash-lite"
+
+# The Gemini model ID to use for analyzing content and suggesting moves.
+analyzer_model_id: "models/gemini-3-flash-preview"
+
+# The Gemini model ID to use for generating vector embeddings.
+embed_model_id: "models/gemini-embedding-001"
+
+# Dimension size for the embedding model (must match the model's output).
+embed_dimension: 768
+
+# --- Paths ---
+# Root directory of your PDF library. Tilde (~) is expanded to your home directory.
+docs_base_dir: "~/documents/"
+
+# Path to the ChromaDB vector store.
+# can be absolute, or relative to this config file.
+# Defaults to "hybrid_semantic_db" in the Current Working Directory if not set.
+# db_path: "hybrid_semantic_db"
+
+# Name of the ChromaDB collection.
+collection_name: "native_vault"
+
+# Folder name to suggestion for low-confidence matches.
+quarantine_folder: "unconfident"
+
+# Path to the file storing the state of batch indexing progress.
+batch_state_file: "~/.local/state/pdforganizer/batch_state.json"
+
+# --- Indexing & Blocklists ---
+# Glob patterns of files to IGNORE during the indexing scan.
+index_blocklist:
+  # - "private/**"
+  # - "backup/**"
+
+# Glob patterns of files to IGNORE when retrieving context for the Analyzer.
+# NOTE: index_blocklist is ALWAYS included automatically.
+# Add extra paths here if you want to index them but hide them from AI context.
+# retrieval_blocklist:
+#   - "sensitive_project/**"
+
+# --- Analyzer Settings ---
+# Number of similar documents to retrieve from DB as context for the AI.
+ret_max_neighbors: 7

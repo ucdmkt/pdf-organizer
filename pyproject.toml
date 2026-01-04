@@ -1,0 +1,36 @@
+[project]
+name = "pdforganizer"
+version = "0.1.0"
+description = "A tool to organize and index PDF documents using Gemini and ChromaDB."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chromadb",
+    "google-genai",
+    "pydantic",
+    "PyYAML",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-mock",
+    "coverage",
+]
+dev = [
+    "black",
+    "isort",
+    "mypy",
+    "pre-commit",
+    "flake8",
+    "pdforganizer[test]",
+]
+
+[tool.setuptools.packages.find]
+include = ["pdforganizer*"]
+exclude = ["hybrid_semantic_db*"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

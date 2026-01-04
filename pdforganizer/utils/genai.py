@@ -1,0 +1,173 @@
+import concurrent.futures
+import mimetypes
+import re
+import time
+
+from google.genai import types
+
+from pdforganizer import config
+from pdforganizer.utils.resilience import retry_with_backoff
+
+OCR_PROMPT = (
+    "Perform full OCR on the given file, and the OCRed text in Markdown format with "
+    "tables, headers and image placeholders, preserving logical layout and formatting "
+    "as much as possible. Generate only the Markdown text, **DO NOT wrap it in any "
+    "text or code block markers, such as ```markdown ... ```: "
+    "Strictly only generate OCRed contents.**"
+)
+
+
+def upload_file(client, path_obj, logger, doc_id="unknown", rel_path="unknown"):
+    """
+    Uploads a file to Gemini using a binary stream directly from disk.
+    This is memory-efficient and avoids header encoding issues for non-ASCII filenames.
+    """
+    try:
+        mime_type, _ = mimetypes.guess_type(path_obj)
+        if not mime_type:
+            mime_type = "application/pdf"  # Default fallback
+
+        with open(path_obj, "rb") as f:
+            # We explicitly provide the display_name to ensure non-ASCII characters
+            # are preserved in Gemini's system without breaking HTTP headers.
+            return retry_with_backoff(logger)(client.files.upload)(
+                file=f,
+                config=types.UploadFileConfig(
+                    mime_type=mime_type, display_name=path_obj.name
+                ),
+            )
+    except Exception:
+        logger.error(
+            "❌ Failed to upload document",
+            exc_info=True,
+            extra={"doc_id": doc_id, "rel_path": rel_path},
+        )
+        return None
+
+
+def ocr_document(client, path_obj, logger, doc_id="unknown", rel_path="unknown"):
+    """
+    Uploads a file and performs OCR using the configured model.
+    Returns the extracted text in Markdown format or None on failure.
+    """
+    try:
+        logger.info(
+            "📸 Multi-page OCR Scan", extra={"doc_id": doc_id, "rel_path": rel_path}
+        )
+
+        uploaded_file = upload_file(
+            client, path_obj, logger, doc_id=doc_id, rel_path=rel_path
+        )
+        if not uploaded_file:
+            return None
+
+        time.sleep(1)  # Allow for processing on the server
+
+        response = retry_with_backoff(logger)(client.models.generate_content)(
+            **build_ocr_request(uploaded_file)
+        )
+
+        text = response.text
+        if text:
+            text = clean_ocr_text(text)
+
+        return text
+    except Exception:
+        logger.error(
+            "❌ Failed to process document",
+            exc_info=True,
+            extra={"doc_id": doc_id, "rel_path": rel_path},
+        )
+        return None
+
+
+def clean_ocr_text(text):
+    """
+    Cleans the OCR text by removing markdown code block markers.
+    """
+    if not text:
+        return text
+
+    text = text.strip()
+
+    # Loop to remove multiple layers of backticks if present
+    while True:
+        original = text
+        # Remove starting block
+        text = re.sub(r"^```[\w-]*\s*", "", text, flags=re.IGNORECASE).strip()
+        # Remove ending block
+        text = re.sub(r"\s*```$", "", text).strip()
+
+        if text == original:
+            break
+
+    return text
+
+
+def build_ocr_request(uploaded_file):
+    """
+    Constructs the standard OCR request body.
+    Ensures consistent prompting across interactive and batch modes.
+    """
+    return {
+        "model": config.settings.ocr_model_id,
+        "contents": [uploaded_file, OCR_PROMPT],
+    }
+
+
+def get_embedding_params(task_type="RETRIEVAL_DOCUMENT"):
+    """
+    Returns the shared configuration parameters for embedding.
+    Useful for ensuring consistency between online and batch modes.
+    """
+    return {
+        "task_type": task_type,
+        "output_dimensionality": config.settings.embed_dimension,
+        "title": "Document chunk" if task_type == "RETRIEVAL_DOCUMENT" else None,
+    }
+
+
+def build_batch_embedding_request(text, task_type="RETRIEVAL_DOCUMENT"):
+    """
+    Constructs the full request dictionary for a batch embedding job.
+    Encapsulates model, content structure, and config params.
+    """
+    request = {
+        "model": config.settings.embed_model_id,
+        "content": {"parts": [{"text": text}]},
+    }
+    request.update(get_embedding_params(task_type))
+    return request
+
+
+def embed_text(client, text, logger, task_type="RETRIEVAL_DOCUMENT"):
+    """
+    Embeds text using the configured embedding model.
+    Returns the embedding response.
+    """
+    params = get_embedding_params(task_type)
+    return retry_with_backoff(logger)(client.models.embed_content)(
+        model=config.settings.embed_model_id,
+        contents=text,
+        config=types.EmbedContentConfig(**params),
+    )
+
+
+def batch_upload_file(client, path_objs, doc_ids, logger, max_workers=10):
+    """
+    Parallelizes file uploads using ThreadPoolExecutor.
+    Returns a list of uploaded file objects (preserving order).
+    Some entries may be None if individual uploads fail.
+    """
+    logger.info(
+        f"🚀 Starting parallel upload of {len(path_objs)} files "
+        f"(max_workers={max_workers})..."
+    )
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # map preserves the order of the input iterables
+        return list(
+            executor.map(
+                lambda p: upload_file(client, p[0], logger, doc_id=p[1]),
+                zip(path_objs, doc_ids),
+            )
+        )
