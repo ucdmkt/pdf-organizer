@@ -1,5 +1,7 @@
 # PDF Organizer
 
+[![CI](https://github.com/ucdmkt/pdf-organizer/actions/workflows/ci.yml/badge.svg)](https://github.com/ucdmkt/pdf-organizer/actions/workflows/ci.yml)
+
 A smart tool to organize and index PDF documents using Google Gemini and ChromaDB.
 
 This project employs a hybrid approach:
