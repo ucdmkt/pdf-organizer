@@ -135,19 +135,18 @@ Common settings to override:
 
 ## Usage
 
-### 1. Analyzer (File Organizer)
-
-Analyze a new PDF to determine its ideal location. The tool will propose a **new filename** and **subdirectory** within your configured document library (`docs_base_dir`) based on the file's content and your existing catalog.
+### 1. Analyzer (Organize Files)
 
 ```bash
 # Analyze a single file
-python -m pdforganizer.analyzer --file /path/to/downloaded/invoice.pdf
+python3 -m pdforganizer.analyzer --file /path/to/invoice.pdf
 
-# Auto-apply changes if confidence is high enough
-python -m pdforganizer.analyzer --file /path/to/doc.pdf --auto-apply
+# Analyze and interactively apply changes (y/n/e)
+python3 -m pdforganizer.analyzer --file /path/to/invoice.pdf --apply
+# 'e' allows you to edit the destination path manually.
 
-# Apply changes interactively
-python -m pdforganizer.analyzer --file /path/to/doc.pdf --apply
+# Automatically move if confidence > 94%
+python3 -m pdforganizer.analyzer --file /path/to/invoice.pdf --auto-apply
 ```
 
 ### 2. Indexer (Batch Processor)

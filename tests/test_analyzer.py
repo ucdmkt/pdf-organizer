@@ -85,3 +85,82 @@ class TestAnalyzer:
                 # We expect valid.pdf in prompt, but NOT unconfident/blocked.pdf
                 assert "valid.pdf" in prompt
                 assert "unconfident/blocked.pdf" not in prompt
+
+    def test_handle_move_action_interactive_edit_traversal(self):
+        """Test that interactive edit rejects path traversal."""
+        base_dir = Path("/tmp/docs").resolve()
+        source = base_dir / "input.pdf"
+        # dest = base_dir / "target.pdf"  # Unused
+
+        # Mock res object
+        class MockRes:
+            target_folder = "."
+            new_filename = "target.pdf"
+            reasoning = "Test"
+            confidence_score = 0.95
+
+        # Mock args
+        class MockArgs:
+            apply = True
+            auto_apply = False
+
+        # Input simulation:
+        # 1. 'e' (edit)
+        # 2. '../../etc/passwd' (traversal attempt)
+        # 3. 'n' (abort loop)
+        inputs = ["e", "../../etc/passwd", "n"]
+
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch("builtins.open", side_effect=OSError),  # Force input() usage
+            patch("pdforganizer.analyzer._perform_move") as mock_move,
+            # We mock _cli_output to verify error messages
+            patch("pdforganizer.analyzer._cli_output") as mock_io,
+        ):
+            analyzer.handle_move_action(
+                MockRes(), source, "md", [], base_dir, MockArgs()
+            )
+
+            # mock_move should NOT be called
+            mock_move.assert_not_called()
+
+            # Verify security waring was logged
+            calls = [str(c) for c in mock_io.mock_calls]
+            assert any("Security Error" in c for c in calls)
+
+    def test_handle_move_action_interactive_edit_whitespace(self):
+        """Test that interactive edit handles filenames with spaces."""
+        base_dir = Path("/tmp/docs").resolve()
+        source = base_dir / "input.pdf"
+
+        # Mock res object
+        class MockRes:
+            target_folder = "."
+            new_filename = "target.pdf"
+            reasoning = "Test"
+            confidence_score = 0.95
+
+        # Mock args
+        class MockArgs:
+            apply = True
+            auto_apply = False
+
+        # Input simulation:
+        # 1. 'e' (edit)
+        # 2. 'New Folder/My File.pdf' (input with spaces)
+        # 3. 'y' (confirm)
+        inputs = ["e", "New Folder/My File.pdf", "y"]
+
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch("builtins.open", side_effect=OSError),
+            patch("pdforganizer.analyzer._perform_move") as mock_move,
+            patch("pdforganizer.analyzer._cli_output"),
+        ):
+            analyzer.handle_move_action(
+                MockRes(), source, "md", [], base_dir, MockArgs()
+            )
+
+            # Expect move to resolved path with spaces
+            expected_dest = base_dir / "New Folder/My File.pdf"
+            mock_move.assert_called_with(source, expected_dest)

@@ -318,28 +318,82 @@ def handle_move_action(res, abs_source_path, doc_markdown, embedding, base_dir, 
 
         # 4b. Interactive Apply Logic
         elif args.apply:
-            try:
-                time.sleep(0.1)  # Ensure stderr is flushed/processed
-                _cli_output("\n⚠️  Move file to suggested location? [y/N]")
-
-                # Force reading from /dev/tty
+            while True:
                 try:
-                    with open("/dev/tty", "r") as tty:
-                        confirm = tty.readline().strip().lower()
-                except OSError:
-                    confirm = input(" > ").strip().lower()
-
-                if not confirm:
+                    time.sleep(0.1)  # Ensure stderr is flushed/processed
                     _cli_output(
-                        "[DEBUG] Input was empty.", level="error", log_only=True
+                        "\n⚠️  [y]es / [n]o / [e]dit suggested location? [y/N/e]"
                     )
 
-                if confirm == "y":
-                    moved_successfully = _perform_move(abs_source_path, dest_path)
-                else:
-                    _cli_output("⏭️ Move skipped by user.")
-            except Exception:
-                _cli_output("❌ Failed to interact/move file: {e}", level="error")
+                    # Force reading from /dev/tty
+                    try:
+                        with open("/dev/tty", "r") as tty:
+                            confirm = tty.readline().strip().lower()
+                    except OSError:
+                        confirm = input(" > ").strip().lower()
+
+                    if not confirm:
+                        _cli_output(
+                            "[DEBUG] Input was empty.", level="error", log_only=True
+                        )
+
+                    if confirm == "y":
+                        moved_successfully = _perform_move(abs_source_path, dest_path)
+                        break
+                    elif confirm == "e":
+                        _cli_output(
+                            "✏️  Enter new relative path "
+                            "(e.g. 'Financial/2024/Invoice.pdf'):"
+                        )
+                        try:
+                            with open("/dev/tty", "r") as tty:
+                                new_rel_input = tty.readline().strip()
+                        except OSError:
+                            new_rel_input = input(" > ").strip()
+
+                        if not new_rel_input:
+                            _cli_output("❌ Empty input. Try again.")
+                            continue
+
+                        # GUARDRAILS
+                        try:
+                            # 1. Reject Absolute Paths
+                            input_path = Path(new_rel_input)
+                            if input_path.is_absolute():
+                                _cli_output(
+                                    "❌ Absolute paths are not allowed. "
+                                    "Please provide a path relative to "
+                                    "the document library."
+                                )
+                                continue
+
+                            # 2. Path Traversal Check
+                            # Resolve the full path and ensure it's within base_dir
+                            candidate_dest = (base_dir / input_path).resolve()
+                            if not str(candidate_dest).startswith(
+                                str(base_dir.resolve())
+                            ):
+                                _cli_output(
+                                    "❌ Security Error: Path traversal detected. "
+                                    "Target must be inside the document library."
+                                )
+                                continue
+
+                            # Valid input
+                            dest_path = candidate_dest
+                            _cli_output(f"🔄 Destination updated to: {dest_path}")
+                            # Loop continues to ask for confirmation on new path (y/n/e)
+
+                        except Exception as e:
+                            _cli_output(f"❌ Invalid path: {e}")
+                            continue
+
+                    else:
+                        _cli_output("⏭️ Move skipped by user.")
+                        break
+                except Exception as e:
+                    _cli_output(f"❌ Failed to interact/move file: {e}", level="error")
+                    break
     else:
         _cli_output(f"🧪 [DRY RUN] Would move '{abs_source_path}' to '{dest_path}'")
 
