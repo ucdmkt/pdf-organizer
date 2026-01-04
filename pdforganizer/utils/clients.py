@@ -1,3 +1,5 @@
+"""Client initialization patterns for GenAI and ChromaDB."""
+
 import chromadb
 from google import genai
 

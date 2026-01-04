@@ -1,3 +1,5 @@
+"""Standalone CLI tool for performing OCR on individual PDF documents."""
+
 import argparse
 import sys
 from pathlib import Path

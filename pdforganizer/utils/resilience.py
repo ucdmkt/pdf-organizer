@@ -1,3 +1,5 @@
+"""Resilience patterns (retries, timeouts) for API interactions."""
+
 import httpcore
 import httpx
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential

@@ -1,3 +1,5 @@
+"""Analyzer module for identifying document similarities and suggesting organization."""
+
 import argparse
 import fnmatch
 import json

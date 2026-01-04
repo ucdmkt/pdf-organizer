@@ -1,3 +1,5 @@
+"""Utilities package for PDF Organizer."""
+
 from pdforganizer.utils import db, generic
 from pdforganizer.utils.clients import (
     get_chroma_client,

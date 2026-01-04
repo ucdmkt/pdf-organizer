@@ -1,3 +1,5 @@
+"""Batch indexing module for the PDF Organizer."""
+
 import argparse
 import fnmatch
 import json
@@ -10,8 +12,6 @@ from google.genai import types
 from pdforganizer import config, utils
 
 LOGGER = utils.setup_logger(__name__)
-# Lazy load to avoid circular imports if needed, but simple import is fine here
-# import utils.db no longer needed as utils exports it
 
 
 def _is_blocklisted(doc_id):

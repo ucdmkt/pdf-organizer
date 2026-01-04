@@ -1,3 +1,5 @@
+"""Generic helper utility functions."""
+
 import hashlib
 
 

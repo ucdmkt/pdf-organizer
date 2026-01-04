@@ -1,3 +1,5 @@
+"""Google GenAI interaction utilities for OCR and Embedding."""
+
 import concurrent.futures
 import mimetypes
 import re

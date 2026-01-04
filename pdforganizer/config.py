@@ -1,14 +1,15 @@
+"""Configuration management for pdf-organizer."""
+
 import logging
 import os
+from pathlib import Path
+from typing import List, Optional
 
 import yaml
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, field_validator
 
 load_dotenv()
-from pathlib import Path  # noqa: E402
-from typing import List, Optional  # noqa: E402
-
-from pydantic import BaseModel, Field, field_validator  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
 
