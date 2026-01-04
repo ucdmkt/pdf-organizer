@@ -25,6 +25,7 @@ dev = [
     "pre-commit",
     "flake8",
     "pdforganizer[test]",
+    "types-PyYAML",
 ]
 
 [tool.setuptools.packages.find]

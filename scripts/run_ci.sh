@@ -5,6 +5,11 @@ set -e
 cd "$(dirname "$0")/.."
 
 echo "🚀 Starting CI Checks..."
+echo "📂 Current Directory: $(pwd)"
+echo "👤 User: $(whoami)"
+echo "🔧 uv version: $(uv --version)"
+echo "🐍 python version: $(python --version)"
+
 
 # Ensure uv is installed
 if ! command -v uv &> /dev/null; then

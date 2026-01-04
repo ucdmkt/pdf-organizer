@@ -31,4 +31,6 @@ jobs:
       run: uv sync --all-extras --dev
 
     - name: Run CI Scripts
-      run: ./scripts/run_ci.sh
+      run: |
+        chmod +x scripts/run_ci.sh
+        ./scripts/run_ci.sh
