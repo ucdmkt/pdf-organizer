@@ -24,6 +24,16 @@ class AppConfig(BaseModel):
     google_api_key: Optional[str] = Field(
         default=None, description="Google API Key. Defaults to env var GOOGLE_API_KEY."
     )
+    google_cloud_project: Optional[str] = Field(
+        default=None,
+        description=(
+            "GCP Project ID for Vertex AI. Defaults to env var GOOGLE_CLOUD_PROJECT."
+        ),
+    )
+    google_cloud_location: str = Field(
+        default="us-central1",
+        description="GCP Location for Vertex AI (default: us-central1).",
+    )
 
     # --- MODEL CONFIG ---
     ocr_model_id: str = "models/gemini-2.5-flash-lite"
@@ -64,16 +74,22 @@ class AppConfig(BaseModel):
 
     def model_post_init(self, __context):
         """Post-initialization to set derived values and Env vars logic."""
-        # 1. Load API Key from Env if not provided
+        # 1. Load Credentials from Env if not provided
+        if not self.google_cloud_project:
+            self.google_cloud_project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+
         if not self.google_api_key:
             self.google_api_key = os.environ.get("GOOGLE_API_KEY")
-            if not self.google_api_key:
-                # API Key is mandatory for GenAI features, but we don't crash
-                # immediately to allow checking help or partial functionality.
-                LOGGER.warning(
-                    "⚠️ GOOGLE_API_KEY not found in config or environment. "
-                    "GenAI features will fail."
-                )
+
+        # 2. Validation: We need at least one authentication method
+        if not self.google_api_key and not self.google_cloud_project:
+            # API Key/Project is mandatory for GenAI features, but we don't crash
+            # immediately to allow checking help or partial functionality.
+            LOGGER.warning(
+                "⚠️ No GenAI credentials found "
+                "(GOOGLE_API_KEY or GOOGLE_CLOUD_PROJECT). "
+                "GenAI features will fail."
+            )
 
         # 2. Derive Retrieval Blocklist
         # Logic: base (user provided or default) + index_blocklist.

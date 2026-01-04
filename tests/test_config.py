@@ -22,6 +22,9 @@ class TestConfig:
         if original_env:
             os.environ["GOOGLE_API_KEY"] = original_env
 
+        if "GOOGLE_CLOUD_PROJECT" in os.environ:
+            del os.environ["GOOGLE_CLOUD_PROJECT"]
+
     def test_default_config(self, clean_env):
         """Test default values when no config file exists."""
         # Ensure no config file is picked up by pointing to non-existent
@@ -33,6 +36,8 @@ class TestConfig:
         assert cfg.ocr_model_id == "models/gemini-2.5-flash-lite"
         # Confirm no hardcoded fallback
         assert cfg.google_api_key is None
+        assert cfg.google_cloud_project is None
+        assert cfg.google_cloud_location == "us-central1"
 
     def test_yaml_loading(self, clean_env, tmp_path):
         """Test loading from YAML file."""
@@ -61,7 +66,15 @@ class TestConfig:
         """Test API key loading from environment."""
         os.environ["GOOGLE_API_KEY"] = "TEST_KEY"
         cfg = config.load_config(Path("/non/existent"))
+        cfg = config.load_config(Path("/non/existent"))
         assert cfg.google_api_key == "TEST_KEY"
+
+    def test_vertex_config_loading(self, clean_env):
+        """Test GCP Project loading from environment."""
+        os.environ["GOOGLE_CLOUD_PROJECT"] = "my-gcp-project"
+        cfg = config.load_config(Path("/non/existent"))
+        assert cfg.google_cloud_project == "my-gcp-project"
+        assert cfg.google_cloud_location == "us-central1"
 
     def test_cwd_loading(self, clean_env, tmp_path, monkeypatch):
         """Test loading from ./config.yaml."""

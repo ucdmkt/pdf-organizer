@@ -90,13 +90,31 @@ We recommend using `uv` for managing the environment.
     uv pip install -e .
     ```
 
-## Configuration
+### 3. Set Up Credentials
 
-Set your Google API key as an environment variable:
+You can use either **Google AI Studio** (simplest) or **Vertex AI** (for GCP projects).
 
-```bash
-export GOOGLE_API_KEY="your-api-key-here"
-```
+#### Option A: Google AI Studio (API Key)
+1. Get an API key from [Google AI Studio](https://aistudio.google.com/).
+2. Set it in your `.env` file:
+   ```bash
+   GOOGLE_API_KEY="your_api_key_here"
+   ```
+
+#### Option B: Vertex AI (GCP Project)
+1. Ensure you have the [gcloud CLI](https://cloud.google.com/sdk/docs/install) installed.
+2. Set your project ID in `.env`:
+   ```bash
+   GOOGLE_CLOUD_PROJECT="your-project-id"
+   # Optional: default is us-central1
+   # GOOGLE_CLOUD_LOCATION="us-central1"
+   ```
+3. Authenticate with Application Default Credentials (ADC):
+   ```bash
+   gcloud auth application-default login
+   ```
+   *Note: If both are set, Vertex AI configuration takes precedence.*
+
 
 You can configure the application using a `config.yaml` file in the project directory or at `~/.config/pdforganizer/config.yaml`.
 
