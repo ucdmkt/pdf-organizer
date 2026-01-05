@@ -70,8 +70,11 @@ The application interacts with vector databases through a vendor-agnostic `Vecto
 
 ```mermaid
 graph TD
+    FS[Filesystem]
+
     subgraph Indexer ["Indexer (Knowledge Base)"]
-        I_Scan[Scans Filesystem] --> I_Hash{Content Hash}
+        FS -- Scan --> I_Scan[Scan Files]
+        I_Scan --> I_Hash{Content Hash}
         I_Hash -- New --> I_OCR[GenAI OCR]
         I_Hash -- Exists --> I_Meta[Update Metadata]
         I_OCR --> I_Embed[GenAI Embedding]
@@ -81,7 +84,8 @@ graph TD
     end
 
     subgraph Analyzer ["Analyzer (Intelligent Agent)"]
-        A_Input[New File on Filesystem] --> A_Hash{Check Hash}
+        FS -- New File --> A_Input[Analyze File]
+        A_Input --> A_Hash{Check Hash}
         A_Hash -- Found --> A_Reuse[Reuse OCR/Embed]
         A_Hash -- New --> A_OCR[GenAI OCR]
         A_Reuse --> A_Context[Retrieve Context]
@@ -92,6 +96,8 @@ graph TD
         A_Filter --> A_LLM[Gemini Flash]
         A_LLM --> A_Action[Suggest Move/Rename]
     end
+
+    A_Action -. Move .-> FS
 
     subgraph Infrastructure
         V_Client --> I_DB[(ChromaDB)]
