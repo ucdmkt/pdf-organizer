@@ -70,29 +70,32 @@ The application interacts with vector databases through a vendor-agnostic `Vecto
 
 ```mermaid
 graph TD
-    %% Shared Infrastructure
+    %% Filesystem
     FS[Filesystem]
-    V_Client[VectorDB Client]
+
+    subgraph Shared ["Shared Components"]
+        V_Client[VectorDB Client]
+        S_OCR[GenAI OCR]
+        S_Embed[GenAI Embedding]
+    end
+
     subgraph Infrastructure
         I_DB[(ChromaDB)]
+        Infra_AIS[Google AI Studio]
+        Infra_Vertex[GCP Vertex AI]
     end
 
     subgraph Indexer ["Indexer (Knowledge Base)"]
         I_Scan[Scan Files] --> I_Hash{Content Hash}
-        I_Hash -- New --> I_OCR[GenAI OCR]
         I_Hash -- Exists --> I_Meta[Update Metadata]
-        I_OCR --> I_Embed[GenAI Embedding]
     end
 
     subgraph Analyzer ["Analyzer (Intelligent Agent)"]
         A_Input[Analyze File] --> A_Hash{Check Hash}
         A_Hash -- Found --> A_Reuse[Reuse OCR/Embed]
-        A_Hash -- New --> A_OCR[GenAI OCR]
         A_Reuse --> A_Context[Retrieve Context]
-        A_OCR --> A_Context
 
-
-        A_Filter[Filter & Rank] --> A_LLM[Gemini Flash]
+        A_Filter[Filter & Rank] --> A_LLM[GenAI RAG]
         A_LLM --> A_Action[Suggest Move/Rename]
     end
 
@@ -100,13 +103,31 @@ graph TD
     FS -- Scan --> I_Scan
     FS -- New File --> A_Input
 
-    I_Embed --> V_Client
+    %% Indexer Flow
+    I_Hash -- New --> S_OCR
+    S_OCR --> S_Embed
+    S_Embed --> V_Client
     I_Meta --> V_Client
+
+    %% Analyzer Flow
+    A_Hash -- New --> S_OCR
+    S_OCR --> A_Context
+
+    %% RAG & Logic Flow
+
     A_Context -- Query --> V_Client
     V_Client -- Results --> A_Filter
 
     A_Action -. Move .-> FS
     V_Client --> I_DB
+
+    %% Infrastructure Connections (Direct)
+    S_OCR -.-> Infra_AIS
+    S_OCR -.-> Infra_Vertex
+    S_Embed -.-> Infra_AIS
+    S_Embed -.-> Infra_Vertex
+    A_LLM -.-> Infra_AIS
+    A_LLM -.-> Infra_Vertex
 ```
 
 ## Prerequisites
