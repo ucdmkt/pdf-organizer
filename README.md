@@ -70,38 +70,40 @@ The application interacts with vector databases through a vendor-agnostic `Vecto
 
 ```mermaid
 graph TD
+    %% Shared Infrastructure
     FS[Filesystem]
+    V_Client[VectorDB Client]
+    I_DB[(ChromaDB)]
 
     subgraph Indexer ["Indexer (Knowledge Base)"]
-        FS -- Scan --> I_Scan[Scan Files]
-        I_Scan --> I_Hash{Content Hash}
+        I_Scan[Scan Files] --> I_Hash{Content Hash}
         I_Hash -- New --> I_OCR[GenAI OCR]
         I_Hash -- Exists --> I_Meta[Update Metadata]
         I_OCR --> I_Embed[GenAI Embedding]
-
-        I_Embed --> V_Client[VectorDB Client]
-        I_Meta --> V_Client
     end
 
     subgraph Analyzer ["Analyzer (Intelligent Agent)"]
-        FS -- New File --> A_Input[Analyze File]
-        A_Input --> A_Hash{Check Hash}
+        A_Input[Analyze File] --> A_Hash{Check Hash}
         A_Hash -- Found --> A_Reuse[Reuse OCR/Embed]
         A_Hash -- New --> A_OCR[GenAI OCR]
         A_Reuse --> A_Context[Retrieve Context]
         A_OCR --> A_Context
-        A_Context -- Query --> V_Client
 
         V_Client -- Results --> A_Filter[Filter & Rank]
         A_Filter --> A_LLM[Gemini Flash]
         A_LLM --> A_Action[Suggest Move/Rename]
     end
 
-    A_Action -. Move .-> FS
+    %% Connections
+    FS -- Scan --> I_Scan
+    FS -- New File --> A_Input
 
-    subgraph Infrastructure
-        V_Client --> I_DB[(ChromaDB)]
-    end
+    I_Embed --> V_Client
+    I_Meta --> V_Client
+    A_Context -- Query --> V_Client
+
+    A_Action -. Move .-> FS
+    V_Client --> I_DB
 ```
 
 ## Prerequisites
