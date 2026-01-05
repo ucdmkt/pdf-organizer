@@ -38,6 +38,14 @@ The Analyzer is the decision engine that processes new, unorganized files.
 - **Hybrid Filtering**: It filters out blocklisted or deleted files from the retrieval context to ensure suggestions are always valid.
 - **Caching**: If you analyze a file that is already in the DB (e.g., duplicated download), it reuses the stored OCR text and embeddings instanty.
 
+### 3. VectorDB Abstraction Layer
+
+The application interacts with vector databases through a vendor-agnostic `VectorDBClient` interface.
+
+- **Flexibility**: Decouples the core logic from specific database implementations.
+- **Providers**: Currently supports local `ChromaDB` (default). Designed to be extensible for Remote Chroma, Qdrant, Milvus, etc.
+- **Factory Pattern**: A `client_factory` handles connection logic transparently.
+
 ```mermaid
 graph TD
     subgraph Indexer ["Indexer (Knowledge Base)"]
@@ -45,8 +53,9 @@ graph TD
         I_Hash -- New --> I_OCR[GenAI OCR]
         I_Hash -- Exists --> I_Meta[Update Metadata]
         I_OCR --> I_Embed[GenAI Embedding]
-        I_Embed --> I_DB[(ChromaDB)]
-        I_Meta --> I_DB
+
+        I_Embed --> V_Client[VectorDB Client]
+        I_Meta --> V_Client
     end
 
     subgraph Analyzer ["Analyzer (Intelligent Agent)"]
@@ -55,10 +64,15 @@ graph TD
         A_Hash -- New --> A_OCR[GenAI OCR]
         A_Reuse --> A_Context[Retrieve Context]
         A_OCR --> A_Context
-        A_Context -- Query --> I_DB
-        I_DB -- Results --> A_Filter[Filter & Rank]
+        A_Context -- Query --> V_Client
+
+        V_Client -- Results --> A_Filter[Filter & Rank]
         A_Filter --> A_LLM[Gemini Flash]
         A_LLM --> A_Action[Suggest Move/Rename]
+    end
+
+    subgraph Infrastructure
+        V_Client --> I_DB[(ChromaDB)]
     end
 ```
 
@@ -214,4 +228,5 @@ To set up the development environment with testing and linting tools:
 - `pdforganizer/`: Main package source.
   - `analyzer.py`: Logic for analyzing and moving single files.
   - `indexer.py`: Batch indexing logic.
+  - `vectordb/`: Vector Database abstraction layer.
   - `utils/`: Helper modules for DB, GenAI, and logging.

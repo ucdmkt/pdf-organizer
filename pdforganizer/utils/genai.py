@@ -112,7 +112,7 @@ def build_ocr_request(uploaded_file):
     Ensures consistent prompting across interactive and batch modes.
     """
     return {
-        "model": config.settings.ocr_model_id,
+        "model": config.SETTINGS.ocr_model_id,
         "contents": [uploaded_file, OCR_PROMPT],
     }
 
@@ -124,7 +124,7 @@ def get_embedding_params(task_type="RETRIEVAL_DOCUMENT"):
     """
     return {
         "task_type": task_type,
-        "output_dimensionality": config.settings.embed_dimension,
+        "output_dimensionality": config.SETTINGS.embed_dimension,
         "title": "Document chunk" if task_type == "RETRIEVAL_DOCUMENT" else None,
     }
 
@@ -135,7 +135,7 @@ def build_batch_embedding_request(text, task_type="RETRIEVAL_DOCUMENT"):
     Encapsulates model, content structure, and config params.
     """
     request = {
-        "model": config.settings.embed_model_id,
+        "model": config.SETTINGS.embed_model_id,
         "content": {"parts": [{"text": text}]},
     }
     request.update(get_embedding_params(task_type))
@@ -149,7 +149,7 @@ def embed_text(client, text, logger, task_type="RETRIEVAL_DOCUMENT"):
     """
     params = get_embedding_params(task_type)
     return retry_with_backoff(logger)(client.models.embed_content)(
-        model=config.settings.embed_model_id,
+        model=config.SETTINGS.embed_model_id,
         contents=text,
         config=types.EmbedContentConfig(**params),
     )

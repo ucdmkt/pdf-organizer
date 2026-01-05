@@ -8,20 +8,25 @@ from pdforganizer import indexer
 
 class TestIndexer:
     @pytest.fixture
-    def setup_indexer(self, mock_chroma_client):
-        self.mock_chroma, self.mock_collection = mock_chroma_client
+    def setup_indexer(self, mock_vector_db):
+        self.mock_vector_db = mock_vector_db
         self.base_dir = Path("/tmp/docs")
 
     def test_is_blocklisted(self):
         """Test global blocklist check."""
-        with patch("pdforganizer.config.settings.index_blocklist", ["blocked/**"]):
+        from pdforganizer import config
+
+        new_settings = config.SETTINGS.model_copy(
+            update={"index_blocklist": ["blocked/**"]}
+        )
+        with patch("pdforganizer.config.SETTINGS", new=new_settings):
             assert indexer._is_blocklisted("blocked/file.pdf")
             assert not indexer._is_blocklisted("safe/file.pdf")
 
     def test_scan_and_sync_idempotency(self, setup_indexer):
         """Test that moved files update metadata instead of duplication."""
         # Setup existing record with OLD path
-        self.mock_collection.get.return_value = {
+        self.mock_vector_db.get.return_value = {
             "ids": ["file_content_hash:123"],
             "metadatas": [{"rel_path": "old/path.pdf", "filename": "path.pdf"}],
         }
@@ -42,7 +47,7 @@ class TestIndexer:
             # Generator should yield nothing because it found an update
             results = list(
                 indexer._scan_and_sync_files(
-                    self.base_dir, self.mock_collection, seen_ids
+                    self.base_dir, self.mock_vector_db, seen_ids
                 )
             )
 
@@ -50,6 +55,6 @@ class TestIndexer:
             assert "file_content_hash:123" in seen_ids
 
             # Verify update was called
-            self.mock_collection.update.assert_called()
-            call_args = self.mock_collection.update.call_args
+            self.mock_vector_db.upsert.assert_called()
+            call_args = self.mock_vector_db.upsert.call_args
             assert call_args.kwargs["metadatas"][0]["rel_path"] == "new/path.pdf"

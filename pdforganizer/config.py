@@ -7,7 +7,7 @@ from typing import List, Optional
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 load_dotenv()
 
@@ -19,6 +19,8 @@ DEFAULT_INDEX_BLOCKLIST: List[str] = []
 
 class AppConfig(BaseModel):
     """Application Configuration Schema"""
+
+    model_config = ConfigDict(frozen=True)
 
     # --- API CONFIG ---
     google_api_key: Optional[str] = Field(
@@ -74,12 +76,16 @@ class AppConfig(BaseModel):
 
     def model_post_init(self, __context):
         """Post-initialization to set derived values and Env vars logic."""
+        # Note: Since model is frozen, we must use object.__setattr__ to modify fields
+
         # 1. Load Credentials from Env if not provided
         if not self.google_cloud_project:
-            self.google_cloud_project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+            object.__setattr__(
+                self, "google_cloud_project", os.environ.get("GOOGLE_CLOUD_PROJECT")
+            )
 
         if not self.google_api_key:
-            self.google_api_key = os.environ.get("GOOGLE_API_KEY")
+            object.__setattr__(self, "google_api_key", os.environ.get("GOOGLE_API_KEY"))
 
         # 2. Validation: We need at least one authentication method
         if not self.google_api_key and not self.google_cloud_project:
@@ -106,7 +112,7 @@ class AppConfig(BaseModel):
             if rule not in merged:
                 merged.append(rule)
 
-        self.retrieval_blocklist = merged
+        object.__setattr__(self, "retrieval_blocklist", merged)
 
     @field_validator("batch_state_file", "db_path", "docs_base_dir", mode="before")
     @classmethod
@@ -158,4 +164,4 @@ def load_config(config_path: Optional[Path] = None) -> AppConfig:
 
 # Global Settings Instance
 # Users can interact with this, or reload it if they want dynamic reloading
-settings = load_config()
+SETTINGS = load_config()

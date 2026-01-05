@@ -11,6 +11,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from pdforganizer import config, utils
+from pdforganizer.vectordb import get_vector_db
 
 PROMPT_TEMPLATE = (
     "I have a new document to organize. "
@@ -96,8 +97,9 @@ def analyze_file(rel_file_path, docs_base_dir):
     absolute source path.
     """
     client = utils.get_genai_client()
-    chroma_client = utils.get_chroma_client()
-    collection = utils.get_collection(chroma_client)
+    vector_db = get_vector_db()
+    # Ensure collection exists (though get/query might auto-lazy load in implementation)
+    vector_db.get_or_create_collection(config.SETTINGS.collection_name)
 
     # Enforce resolution relative to provided base directory
     # Enforce resolution relative to provided base directory
@@ -123,7 +125,11 @@ def analyze_file(rel_file_path, docs_base_dir):
         "🔍 Checking DB for existing hash: {doc_id}",
         extra={"doc_id": doc_id, "rel_path": rel_file_path},
     )
-    existing_record = collection.get(ids=[doc_id], include=["embeddings", "documents"])
+    existing_record = vector_db.get(
+        collection_name=config.SETTINGS.collection_name,
+        ids=[doc_id],
+        include=["documents", "metadatas", "embeddings"],
+    )
 
     doc_markdown = None
     embedding_values = None
@@ -168,7 +174,7 @@ def analyze_file(rel_file_path, docs_base_dir):
 
     # 3. Iterative Retrieval for Valid Context
     # We want exactly N valid neighbors. Querying more if some are missing on disk.
-    target_k = config.settings.ret_max_neighbors
+    target_k = config.SETTINGS.ret_max_neighbors
     current_k = target_k
     max_k = 50  # Cap to prevent abuse
 
@@ -177,10 +183,11 @@ def analyze_file(rel_file_path, docs_base_dir):
 
     while len(valid_metadatas) < target_k and current_k <= max_k:
         LOGGER.info(f"🔍 Querying {current_k} candidates...", extra={"doc_id": doc_id})
-        results = collection.query(
+
+        results = vector_db.query(
+            collection_name=config.SETTINGS.collection_name,
             query_embeddings=[embedding_values],
             n_results=current_k,
-            include=["metadatas", "documents"],
         )
 
         # Reset buckets to ensure order preservation from top rank
@@ -188,12 +195,12 @@ def analyze_file(rel_file_path, docs_base_dir):
         valid_documents = []
 
         # Process results
-        if not results["ids"] or not results["ids"][0]:
+        if not results:
             break
 
-        for i in range(len(results["ids"][0])):
-            md = results["metadatas"][0][i]
-            doc_content = results["documents"][0][i]
+        for res in results:
+            md = res.metadata
+            doc_content = res.content
             rel_path = md.get("rel_path")
 
             if not rel_path:
@@ -202,7 +209,7 @@ def analyze_file(rel_file_path, docs_base_dir):
             # Check Blocklist
             if any(
                 fnmatch.fnmatch(rel_path, pattern)
-                for pattern in config.settings.retrieval_blocklist
+                for pattern in config.SETTINGS.retrieval_blocklist
             ):
                 LOGGER.debug(f"🛑 Skipping blocklisted context: {rel_path}")
                 continue
@@ -223,7 +230,7 @@ def analyze_file(rel_file_path, docs_base_dir):
 
         # If we didn't find enough, verify if we even have enough in DB total
         # (This is hard to check efficiently without a count, but we just double k)
-        if len(results["ids"][0]) < current_k:
+        if len(results) < current_k:
             # We retrieved everything available and it wasn't enough
             break
 
@@ -259,10 +266,10 @@ def analyze_file(rel_file_path, docs_base_dir):
     )
 
     response = utils.retry_with_backoff(LOGGER)(client.models.generate_content)(
-        model=config.settings.analyzer_model_id,
+        model=config.SETTINGS.analyzer_model_id,
         contents=[
             PROMPT_TEMPLATE.format(
-                n_neighbors=config.settings.ret_max_neighbors, history=history
+                n_neighbors=config.SETTINGS.ret_max_neighbors, history=history
             ),
             doc_markdown,
         ],
@@ -305,10 +312,10 @@ def handle_move_action(res, abs_source_path, doc_markdown, embedding, base_dir, 
                 _cli_output(
                     f"⚠️  [AUTO-APPLY] Low confidence "
                     f"({res.confidence_score*100:.1f}%). "
-                    f"Moving to quarantine '{config.settings.quarantine_folder}'."
+                    f"Moving to quarantine '{config.SETTINGS.quarantine_folder}'."
                 )
                 quarantine_dest = (
-                    base_dir / config.settings.quarantine_folder / res.new_filename
+                    base_dir / config.SETTINGS.quarantine_folder / res.new_filename
                 )
                 # We treat quarantine moves as 'successful' moves but they might be
                 # blocked from indexing
@@ -409,7 +416,7 @@ def handle_move_action(res, abs_source_path, doc_markdown, embedding, base_dir, 
             # Check Blocklist
             if any(
                 fnmatch.fnmatch(rel_path, pattern)
-                for pattern in config.settings.index_blocklist
+                for pattern in config.SETTINGS.index_blocklist
             ):
                 _cli_output(
                     f"🚫 Destination {rel_path} is in blocklist. Skipping indexing."
@@ -423,11 +430,17 @@ def handle_move_action(res, abs_source_path, doc_markdown, embedding, base_dir, 
             doc_id = f"file_content_hash:{file_hash}"
 
             # Save to ChromaDB using SHARED logic
-            chroma_client = utils.get_chroma_client()
-            collection = utils.get_collection(chroma_client)
+            vector_db = get_vector_db()
 
             utils.db.save_to_vector_store(
-                collection, doc_id, dest_path, rel_path, doc_markdown, embedding, LOGGER
+                vector_db,
+                config.SETTINGS.collection_name,
+                doc_id,
+                dest_path,
+                rel_path,
+                doc_markdown,
+                embedding,
+                LOGGER,
             )
 
         except Exception as e:
@@ -449,8 +462,8 @@ def parse_args():
     parser.add_argument(
         "--docs-base-dir",
         type=str,
-        default=str(config.settings.docs_base_dir),
-        help=f"Base directory for documents (default: {config.settings.docs_base_dir})",
+        default=str(config.SETTINGS.docs_base_dir),
+        help=f"Base directory for documents (default: {config.SETTINGS.docs_base_dir})",
     )
     parser.add_argument(
         "--apply",

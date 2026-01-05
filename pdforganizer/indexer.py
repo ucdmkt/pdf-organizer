@@ -10,6 +10,7 @@ from pathlib import Path
 from google.genai import types
 
 from pdforganizer import config, utils
+from pdforganizer.vectordb import get_vector_db
 
 LOGGER = utils.setup_logger(__name__)
 
@@ -17,15 +18,15 @@ LOGGER = utils.setup_logger(__name__)
 def _is_blocklisted(doc_id):
     """Checks if a document ID matches any glob pattern in the blocklist."""
     return any(
-        fnmatch.fnmatch(doc_id, pattern) for pattern in config.settings.index_blocklist
+        fnmatch.fnmatch(doc_id, pattern) for pattern in config.SETTINGS.index_blocklist
     )
 
 
 def _init_services():
     client = utils.get_genai_client()
-    chroma_client = utils.get_chroma_client()
-    collection = utils.get_collection(chroma_client)
-    return client, collection
+    vector_db = get_vector_db()
+    vector_db.get_or_create_collection(config.SETTINGS.collection_name)
+    return client, vector_db
 
 
 def _poll_job(client, job_name, interval=10):
@@ -49,7 +50,7 @@ def _poll_job(client, job_name, interval=10):
         time.sleep(interval)
 
 
-def _scan_and_sync_files(docs_base_path, collection, seen_ids_accumulator):
+def _scan_and_sync_files(docs_base_path, vector_db, seen_ids_accumulator):
     """
     Scans files, syncs metadata for moved files, and yields new files for indexing.
     Populates seen_ids_accumulator in place with valid file content hashes.
@@ -82,7 +83,10 @@ def _scan_and_sync_files(docs_base_path, collection, seen_ids_accumulator):
             seen_ids_accumulator.add(doc_id)
 
             # 2. Check DB
-            existing = collection.get(ids=[doc_id], include=["metadatas"])
+            existing = vector_db.get(
+                collection_name=config.SETTINGS.collection_name,
+                ids=[doc_id],
+            )
             if existing and existing.get("ids"):
                 # File exists in DB (Hash Match)
                 # Check if path metadata needs update (Move detection)
@@ -96,7 +100,11 @@ def _scan_and_sync_files(docs_base_path, collection, seen_ids_accumulator):
                     )
                     existing_meta["rel_path"] = rel_path
                     existing_meta["filename"] = full_path_obj.name
-                    collection.update(ids=[doc_id], metadatas=[existing_meta])
+                    vector_db.upsert(
+                        collection_name=config.SETTINGS.collection_name,
+                        ids=[doc_id],
+                        metadatas=[existing_meta],
+                    )
                 else:
                     LOGGER.info(
                         "⏭️ Skipped (already indexed)",
@@ -114,8 +122,8 @@ def _scan_and_sync_files(docs_base_path, collection, seen_ids_accumulator):
 
 def _save_batch_state(state):
     """Saves the current batch state to a predictable file location."""
-    config.settings.batch_state_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(config.settings.batch_state_file, "w", encoding="utf-8") as f:
+    config.SETTINGS.batch_state_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(config.SETTINGS.batch_state_file, "w", encoding="utf-8") as f:
         # Convert Path objects to strings for JSON serialization
         serializable_metadata = [[m[0], str(m[1])] for m in state.get("metadata", [])]
         state_copy = state.copy()
@@ -125,9 +133,9 @@ def _save_batch_state(state):
 
 def _load_batch_state():
     """Loads the batch state if it exists."""
-    if config.settings.batch_state_file.exists():
+    if config.SETTINGS.batch_state_file.exists():
         try:
-            with open(config.settings.batch_state_file, "r", encoding="utf-8") as f:
+            with open(config.SETTINGS.batch_state_file, "r", encoding="utf-8") as f:
                 state = json.load(f)
                 # Convert strings back to Path objects
                 state["metadata"] = [
@@ -142,19 +150,19 @@ def _load_batch_state():
 
 def _clear_batch_state():
     """Clears the batch state file."""
-    if config.settings.batch_state_file.exists():
-        config.settings.batch_state_file.unlink()
+    if config.SETTINGS.batch_state_file.exists():
+        config.SETTINGS.batch_state_file.unlink()
         LOGGER.info("🧹 Batch state cleared.")
 
 
-def _run_auto_purge(collection, seen_ids):
+def _run_auto_purge(vector_db, seen_ids):
     """
     Removes records from VectorDB that were not seen in the current scan (Orphans).
     """
     LOGGER.info("🧹 Starting database auto-purge check...")
 
     # Retrieve all IDs from the collection
-    res = collection.get(include=[])
+    res = vector_db.get(collection_name=config.SETTINGS.collection_name)
     all_ids = set(res.get("ids", []))
 
     orphans = all_ids - seen_ids
@@ -164,7 +172,9 @@ def _run_auto_purge(collection, seen_ids):
             f"⚠️ Found {len(orphans)} orphan records "
             "(missing or blocklisted files). Purging..."
         )
-        collection.delete(ids=list(orphans))
+        vector_db.delete(
+            collection_name=config.SETTINGS.collection_name, ids=list(orphans)
+        )
         LOGGER.info("✅ Purge complete.")
     else:
         LOGGER.info("✅ Database is clean (no orphans).")
@@ -239,7 +249,7 @@ def _manage_ocr_phase(client, chunk_files):
         )
 
     batch_job = utils.retry_with_backoff(LOGGER)(client.batches.create)(
-        model=config.settings.ocr_model_id,
+        model=config.SETTINGS.ocr_model_id,
         src=types.BatchJobSource(file_name=upload_ref.name),
     )
     job_id = batch_job.name
@@ -382,7 +392,7 @@ def _manage_embedding_phase(client, valid_map, batch_metadata):
             )
 
         embed_job = utils.retry_with_backoff(LOGGER)(client.batches.create_embeddings)(
-            model=config.settings.embed_model_id,
+            model=config.SETTINGS.embed_model_id,
             src=types.EmbeddingsBatchJobSource(file_name=upload_ref.name),
         )
         job_id = embed_job.name
@@ -407,7 +417,7 @@ def _manage_embedding_phase(client, valid_map, batch_metadata):
 
 
 def _wait_for_embedding_and_index(
-    client, collection, job_id, batch_metadata, valid_map, docs_base_path
+    client, vector_db, job_id, batch_metadata, valid_map, docs_base_path
 ):
     """Waits for Embedding job and finalizes indexing using ID mapping."""
     embed_job = _poll_job(client, job_id, interval=5)
@@ -467,7 +477,8 @@ def _wait_for_embedding_and_index(
                     rel_path = item["full_path"].name
 
                 utils.db.save_to_vector_store(
-                    collection,
+                    vector_db,
+                    config.SETTINGS.collection_name,
                     item["doc_id"],
                     item["full_path"],
                     rel_path,
@@ -487,7 +498,7 @@ def _wait_for_embedding_and_index(
         LOGGER.error(f"❌ Failed to finalize indexing: {e}", exc_info=True)
 
 
-def _run_batch(client, collection, docs_base_path, batch_size=100):
+def _run_batch(client, vector_db, docs_base_path, batch_size=100):
 
     def process_new_chunk(chunk_files):
         """Standard flow for processing a fresh chunk of files."""
@@ -508,7 +519,7 @@ def _run_batch(client, collection, docs_base_path, batch_size=100):
 
         # 3. Finalize
         _wait_for_embedding_and_index(
-            client, collection, emb_job_id, batch_metadata, valid_map, docs_base_path
+            client, vector_db, emb_job_id, batch_metadata, valid_map, docs_base_path
         )
 
     def resume_existing_job(saved_state):
@@ -536,7 +547,7 @@ def _run_batch(client, collection, docs_base_path, batch_size=100):
             # Note: valid_map is fresh here
             _wait_for_embedding_and_index(
                 client,
-                collection,
+                vector_db,
                 emb_job_id,
                 batch_metadata,
                 valid_map,
@@ -564,7 +575,7 @@ def _run_batch(client, collection, docs_base_path, batch_size=100):
 
             # Resume waiting for Embedding
             _wait_for_embedding_and_index(
-                client, collection, job_id, batch_metadata, valid_map, docs_base_path
+                client, vector_db, job_id, batch_metadata, valid_map, docs_base_path
             )
 
     # 1. Startup Recovery Check
@@ -577,7 +588,7 @@ def _run_batch(client, collection, docs_base_path, batch_size=100):
     seen_ids = set()
 
     for doc_id, full_path_obj in _scan_and_sync_files(
-        docs_base_path, collection, seen_ids
+        docs_base_path, vector_db, seen_ids
     ):
         current_chunk.append((doc_id, full_path_obj))
         if len(current_chunk) >= batch_size:
@@ -588,7 +599,7 @@ def _run_batch(client, collection, docs_base_path, batch_size=100):
         process_new_chunk(current_chunk)
 
     # Auto-Purge at the end of the run
-    _run_auto_purge(collection, seen_ids)
+    _run_auto_purge(vector_db, seen_ids)
 
 
 if __name__ == "__main__":
@@ -598,7 +609,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--docs-base-dir",
         type=str,
-        default=str(config.settings.docs_base_dir),
+        default=str(config.SETTINGS.docs_base_dir),
         help=(
             "Path to the base directory containing documents to index "
             "(recursive search enabled)."
@@ -614,6 +625,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Initialize services once
-    client, collection = _init_services()
+    client, vector_db = _init_services()
 
-    _run_batch(client, collection, args.docs_base_dir, batch_size=args.batch_size)
+    _run_batch(client, vector_db, args.docs_base_dir, batch_size=args.batch_size)

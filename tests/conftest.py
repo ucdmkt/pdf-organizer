@@ -31,16 +31,14 @@ def mock_genai_client(mocker):
 
 
 @pytest.fixture
-def mock_chroma_client(mocker):
-    """Mocks the ChromaDB Client and Collection."""
-    mock_collection = MagicMock()
-    mock_client = MagicMock()
-    mock_client.get_or_create_collection.return_value = mock_collection
+def mock_vector_db(mocker):
+    """Mocks the VectorDBClient."""
+    mock_db = MagicMock()
 
-    mocker.patch(
-        "pdforganizer.utils.clients.chromadb.PersistentClient", return_value=mock_client
-    )
-    mocker.patch("pdforganizer.utils.get_chroma_client", return_value=mock_client)
-    mocker.patch("pdforganizer.utils.get_collection", return_value=mock_collection)
+    # Mock factory where it is used (since they use `from ... import`)
+    mocker.patch("pdforganizer.analyzer.get_vector_db", return_value=mock_db)
+    mocker.patch("pdforganizer.indexer.get_vector_db", return_value=mock_db)
+    # Also patch the source for anyone else (e.g. tests importing it directly)
+    mocker.patch("pdforganizer.vectordb.get_vector_db", return_value=mock_db)
 
-    return mock_client, mock_collection
+    return mock_db
