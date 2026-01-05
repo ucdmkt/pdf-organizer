@@ -12,7 +12,7 @@ This project employs a hybrid approach:
 
 ## Features
 
-- **Smart Filing**: AI-powered suggestions to **rename and move** files from your inbox/downloads to their ideal location within your document library.
+- **Smart Filing**: AI-powered suggestions to **rename and move** files on your **filesystem** (e.g., from Downloads to Library).
 - **Hash-Based Caching**: Avoids redundant OCR and API calls for already-processed files.
 - **Iterative Retrieval**: Automatically expands search context to find valid examples, ignoring missing or blocklisted files.
 - **Idempotent Indexing**: Handles moved files gracefully by updating metadata instead of creating duplicates.
@@ -49,7 +49,7 @@ The application interacts with vector databases through a vendor-agnostic `Vecto
 ```mermaid
 graph TD
     subgraph Indexer ["Indexer (Knowledge Base)"]
-        I_Scan[Scans Directory] --> I_Hash{Content Hash}
+        I_Scan[Scans Filesystem] --> I_Hash{Content Hash}
         I_Hash -- New --> I_OCR[GenAI OCR]
         I_Hash -- Exists --> I_Meta[Update Metadata]
         I_OCR --> I_Embed[GenAI Embedding]
@@ -59,7 +59,7 @@ graph TD
     end
 
     subgraph Analyzer ["Analyzer (Intelligent Agent)"]
-        A_Input[New File] --> A_Hash{Check Hash}
+        A_Input[New File on Filesystem] --> A_Hash{Check Hash}
         A_Hash -- Found --> A_Reuse[Reuse OCR/Embed]
         A_Hash -- New --> A_OCR[GenAI OCR]
         A_Reuse --> A_Context[Retrieve Context]
