@@ -63,7 +63,8 @@ graph TD
     ```bash
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
-*   **Google Gemini API Key**: You need an API key from Google AI Studio.
+*   **Vertex AI (GCP)**: Requires a Google Cloud Project with Vertex AI API enabled. (Takes precedence if configured).
+*   **Google Gemini API Key**: Requires an API key from Google AI Studio. (Used if Vertex AI is not configured).
 
 ## Installation
 
