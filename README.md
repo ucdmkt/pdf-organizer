@@ -73,7 +73,9 @@ graph TD
     %% Shared Infrastructure
     FS[Filesystem]
     V_Client[VectorDB Client]
-    I_DB[(ChromaDB)]
+    subgraph Infrastructure
+        I_DB[(ChromaDB)]
+    end
 
     subgraph Indexer ["Indexer (Knowledge Base)"]
         I_Scan[Scan Files] --> I_Hash{Content Hash}
@@ -89,8 +91,8 @@ graph TD
         A_Reuse --> A_Context[Retrieve Context]
         A_OCR --> A_Context
 
-        V_Client -- Results --> A_Filter[Filter & Rank]
-        A_Filter --> A_LLM[Gemini Flash]
+
+        A_Filter[Filter & Rank] --> A_LLM[Gemini Flash]
         A_LLM --> A_Action[Suggest Move/Rename]
     end
 
@@ -101,6 +103,7 @@ graph TD
     I_Embed --> V_Client
     I_Meta --> V_Client
     A_Context -- Query --> V_Client
+    V_Client -- Results --> A_Filter
 
     A_Action -. Move .-> FS
     V_Client --> I_DB
