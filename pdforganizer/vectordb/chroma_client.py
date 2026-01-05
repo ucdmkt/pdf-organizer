@@ -1,7 +1,7 @@
 """ChromaDB implementation of VectorDBClient."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import chromadb
 from chromadb.api import ClientAPI
@@ -36,8 +36,8 @@ class ChromaDBClient(VectorDBClient):
         collection.upsert(
             ids=ids,
             documents=documents,
-            embeddings=embeddings,
-            metadatas=metadatas,
+            embeddings=cast(Any, embeddings),
+            metadatas=cast(Any, metadatas),
         )
 
     def query(
@@ -50,36 +50,49 @@ class ChromaDBClient(VectorDBClient):
     ) -> List[SearchResult]:
         collection = self._client.get_collection(name=collection_name)
 
-        # Chroma query args
-        args = {
-            "query_embeddings": query_embeddings,
-            "n_results": n_results,
-        }
-        if where:
-            args["where"] = where
-        if where_document:
-            args["where_document"] = where_document
-
-        results = collection.query(**args)
+        # Explicitly pass arguments to satisfy mypy strict typing
+        results = collection.query(
+            query_embeddings=cast(Any, query_embeddings),
+            n_results=n_results,
+            where=where,
+            where_document=cast(Any, where_document),
+        )
 
         # Transform to standard SearchResult objects
         output = []
 
         # Chroma returns lists of lists (batch queries).
         # We only support batch=1 for now based on usage.
-        # But let's handle the structure safely.
-        # results['ids'] is [[id1, id2...]]
 
-        if not results or not results.get("ids") or not results["ids"][0]:
+        # Safe access with explicit type checks for mypy
+        ids = results.get("ids")
+        if not ids or not ids[0]:
             return []
 
-        # Iterate over the first batch result
-        num_results = len(results["ids"][0])
+        # We know we have at least one list of IDs
+        batch_ids = ids[0]
+        num_results = len(batch_ids)
+
+        documents = results.get("documents")
+        metadatas = results.get("metadatas")
+        distances = results.get("distances")
+
         for i in range(num_results):
-            _id = results["ids"][0][i]
-            _content = results["documents"][0][i] if results.get("documents") else ""
-            _meta = results["metadatas"][0][i] if results.get("metadatas") else {}
-            _dist = results["distances"][0][i] if results.get("distances") else 0.0
+            _id = batch_ids[i]
+
+            # Safe indexing: check if the outer list and the inner list exist
+            _content = ""
+            if documents and len(documents) > 0 and documents[0] is not None:
+                _content = documents[0][i]
+
+            _meta: Dict[str, Any] = {}
+            if metadatas and len(metadatas) > 0 and metadatas[0] is not None:
+                # cast to dict[str, Any] as chroma metadata is closer to that
+                _meta = cast(Dict[str, Any], metadatas[0][i])
+
+            _dist = 0.0
+            if distances and len(distances) > 0 and distances[0] is not None:
+                _dist = distances[0][i]
 
             output.append(
                 SearchResult(id=_id, content=_content, metadata=_meta, distance=_dist)
@@ -103,7 +116,7 @@ class ChromaDBClient(VectorDBClient):
         if include:
             kwargs["include"] = include
 
-        return collection.get(**kwargs)
+        return cast(Dict[str, Any], collection.get(**kwargs))
 
     def delete(
         self,
