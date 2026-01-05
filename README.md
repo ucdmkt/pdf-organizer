@@ -5,32 +5,38 @@
 A smart tool to organize and index PDF documents using Google Gemini and ChromaDB.
 
 This project employs a hybrid approach:
+
 1.  **Iterative Retrieval**: Finds similar documents in your existing library to understand your filing conventions.
 2.  **GenAI Analysis**: Uses Gemini Flash to suggest the best folder structure and filename for new documents based on content and retrieved context.
 3.  **Semantic Indexing**: Indexes document content and embeddings in a local vector database (ChromaDB) for future retrieval.
 
 ## Features
 
-*   **Smart Filing**: AI-powered suggestions to **rename and move** files from your inbox/downloads to their ideal location within your document library.
-*   **Hash-Based Caching**: Avoids redundant OCR and API calls for already-processed files.
-*   **Iterative Retrieval**: Automatically expands search context to find valid examples, ignoring missing or blocklisted files.
-*   **Idempotent Indexing**: Handles moved files gracefully by updating metadata instead of creating duplicates.
-*   **Interactive / Auto Mode**: Choose to review suggestions or auto-apply high-confidence matches.
+- **Smart Filing**: AI-powered suggestions to **rename and move** files from your inbox/downloads to their ideal location within your document library.
+- **Hash-Based Caching**: Avoids redundant OCR and API calls for already-processed files.
+- **Iterative Retrieval**: Automatically expands search context to find valid examples, ignoring missing or blocklisted files.
+- **Idempotent Indexing**: Handles moved files gracefully by updating metadata instead of creating duplicates.
+- **Interactive / Auto Mode**: Choose to review suggestions or auto-apply high-confidence matches.
 
 ## Architecture & Approach
+
 This application is designed as a **Retrieval-Augmented Generation (RAG)** system specialized for file organization.
 
 ### 1. The Indexer (Knowledge Base)
+
 The Indexer scans your existing document library to build a "Knowledge Base" of your filing habits.
-*   **Hash-Based Idempotency**: Files are identified by content hash (SHA256). Moving a file doesn't trigger re-indexing/re-OCR, only a metadata update.
-*   **Pipeline**: `Scan` -> `Check DB` -> `OCR (Gemini 2.5)` -> `Embed (Gemini Embedding)` -> `Vector Store (ChromaDB)`.
-*   **Resilience**: Batch state is saved locally, allowing you to resume interrupted scans safely.
+
+- **Hash-Based Idempotency**: Files are identified by content hash (SHA256). Moving a file doesn't trigger re-indexing/re-OCR, only a metadata update.
+- **Pipeline**: `Scan` -> `Check DB` -> `OCR (Gemini 2.5)` -> `Embed (Gemini Embedding)` -> `Vector Store (ChromaDB)`.
+- **Resilience**: Batch state is saved locally, allowing you to resume interrupted scans safely.
 
 ### 2. The Analyzer (Intelligent Agent)
+
 The Analyzer is the decision engine that processes new, unorganized files.
-*   **Contextual Awareness**: It doesn't just look at the file content. It retrieves the **7 most similar documents** (default) from your existing library to understand *where* similar files live and *how* they are named.
-*   **Hybrid Filtering**: It filters out blocklisted or deleted files from the retrieval context to ensure suggestions are always valid.
-*   **Caching**: If you analyze a file that is already in the DB (e.g., duplicated download), it reuses the stored OCR text and embeddings instanty.
+
+- **Contextual Awareness**: It doesn't just look at the file content. It retrieves the **7 most similar documents** (default) from your existing library to understand _where_ similar files live and _how_ they are named.
+- **Hybrid Filtering**: It filters out blocklisted or deleted files from the retrieval context to ensure suggestions are always valid.
+- **Caching**: If you analyze a file that is already in the DB (e.g., duplicated download), it reuses the stored OCR text and embeddings instanty.
 
 ```mermaid
 graph TD
@@ -58,25 +64,27 @@ graph TD
 
 ## Prerequisites
 
-*   **Python**: >= 3.10
-*   **uv**: An extremely fast Python package and project manager.
-    ```bash
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    ```
-*   **Vertex AI (GCP)**: Requires a Google Cloud Project with Vertex AI API enabled. (Takes precedence if configured).
-*   **Google Gemini API Key**: Requires an API key from Google AI Studio. (Used if Vertex AI is not configured).
+- **Python**: >= 3.10
+- **uv**: An extremely fast Python package and project manager.
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+- **Vertex AI (GCP)**: Requires a Google Cloud Project with Vertex AI API enabled. (Takes precedence if configured).
+- **Google Gemini API Key**: Requires an API key from Google AI Studio. (Used if Vertex AI is not configured).
 
 ## Installation
 
 We recommend using `uv` for managing the environment.
 
 1.  **Clone the repository**:
+
     ```bash
     git clone https://github.com/ucdmkt/pdf-organizer.git
     cd pdf-organizer
     ```
 
 2.  **Set up the environment**:
+
     ```bash
     # Create valid virtual environment
     uv venv
@@ -96,6 +104,7 @@ We recommend using `uv` for managing the environment.
 You can use either **Google AI Studio** (simplest) or **Vertex AI** (for GCP projects).
 
 #### Option A: Google AI Studio (API Key)
+
 1. Get an API key from [Google AI Studio](https://aistudio.google.com/).
 2. Set it in your `.env` file:
    ```bash
@@ -103,6 +112,7 @@ You can use either **Google AI Studio** (simplest) or **Vertex AI** (for GCP pro
    ```
 
 #### Option B: Vertex AI (GCP Project)
+
 1. Ensure you have the [gcloud CLI](https://cloud.google.com/sdk/docs/install) installed.
 2. Set your project ID in `.env`:
    ```bash
@@ -114,12 +124,12 @@ You can use either **Google AI Studio** (simplest) or **Vertex AI** (for GCP pro
    ```bash
    gcloud auth application-default login
    ```
-   *Note: If both are set, Vertex AI configuration takes precedence.*
-
+   _Note: If both are set, Vertex AI configuration takes precedence._
 
 You can configure the application using a `config.yaml` file in the project directory or at `~/.config/pdforganizer/config.yaml`.
 
 Example `config.yaml`:
+
 ```yaml
 docs_base_dir: "~/documents/"
 index_blocklist:
@@ -130,9 +140,10 @@ index_blocklist:
 A template file `config.yaml.example` is provided in the repository.
 
 Common settings to override:
-*   `docs_base_dir`: The root directory of your document library.
-*   `index_blocklist`: Glob patterns for files to exclude from indexing.
-*   `ret_max_neighbors`: Number of examples to retrieve (default: 7).
+
+- `docs_base_dir`: The root directory of your document library.
+- `index_blocklist`: Glob patterns for files to exclude from indexing.
+- `ret_max_neighbors`: Number of examples to retrieve (default: 7).
 
 ## Usage
 
@@ -175,16 +186,19 @@ python -m pdforganizer.ocr_tool input.pdf -o output.md
 To set up the development environment with testing and linting tools:
 
 1.  **Install dev dependencies**:
+
     ```bash
     uv pip install -e ".[dev]"
     ```
 
 2.  **Run tests**:
+
     ```bash
     pytest
     ```
 
 3.  **Type checking**:
+
     ```bash
     mypy pdforganizer
     ```
@@ -197,7 +211,7 @@ To set up the development environment with testing and linting tools:
 
 ## Project Structure
 
-*   `pdforganizer/`: Main package source.
-    *   `analyzer.py`: Logic for analyzing and moving single files.
-    *   `indexer.py`: Batch indexing logic.
-    *   `utils/`: Helper modules for DB, GenAI, and logging.
+- `pdforganizer/`: Main package source.
+  - `analyzer.py`: Logic for analyzing and moving single files.
+  - `indexer.py`: Batch indexing logic.
+  - `utils/`: Helper modules for DB, GenAI, and logging.
