@@ -10,6 +10,28 @@ This project employs a hybrid approach:
 2.  **GenAI Analysis**: Uses Gemini Flash to suggest the best folder structure and filename for new documents based on content and retrieved context.
 3.  **Semantic Indexing**: Indexes document content and embeddings in a local vector database (ChromaDB) for future retrieval.
 
+<!--TOC-->
+
+- [PDF Organizer](#pdf-organizer)
+  - [Features](#features)
+  - [Architecture & Approach](#architecture--approach)
+    - [1. The Indexer (Knowledge Base)](#1-the-indexer-knowledge-base)
+    - [2. The Analyzer (Intelligent Agent)](#2-the-analyzer-intelligent-agent)
+    - [3. VectorDB Abstraction Layer](#3-vectordb-abstraction-layer)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+    - [3. Set Up Credentials](#3-set-up-credentials)
+      - [Option A: Google AI Studio (API Key)](#option-a-google-ai-studio-api-key)
+      - [Option B: Vertex AI (GCP Project)](#option-b-vertex-ai-gcp-project)
+  - [Usage](#usage)
+    - [1. Analyzer (Organize Files)](#1-analyzer-organize-files)
+    - [2. Indexer (Batch Processor)](#2-indexer-batch-processor)
+    - [3. OCR Tool](#3-ocr-tool)
+  - [Development](#development)
+  - [Project Structure](#project-structure)
+
+<!--TOC-->
+
 ## Features
 
 - **Smart Filing**: AI-powered suggestions to **rename and move** files on your **filesystem** (e.g., from Downloads to Library).
