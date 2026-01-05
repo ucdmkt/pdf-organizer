@@ -26,6 +26,7 @@ dev = [
     "flake8",
     "pdforganizer[test]",
     "types-PyYAML",
+    "types-requests",
 ]
 
 [tool.setuptools.packages.find]
