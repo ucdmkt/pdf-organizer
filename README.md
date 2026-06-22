@@ -142,7 +142,7 @@ graph TD
 
 ## Installation
 
-We recommend using `uv` for managing the environment.
+We recommend using `uv` for managing dependencies and running the application.
 
 1.  **Clone the repository**:
 
@@ -151,20 +151,10 @@ We recommend using `uv` for managing the environment.
     cd pdf-organizer
     ```
 
-2.  **Set up the environment**:
+2.  **Install and sync dependencies**:
 
     ```bash
-    # Create valid virtual environment
-    uv venv
-
-    # Activate it
-    source .venv/bin/activate
-    ```
-
-3.  **Install dependencies**:
-    ```bash
-    # Install the package in editable mode
-    uv pip install -e .
+    uv sync
     ```
 
 ### 3. Set Up Credentials
@@ -182,17 +172,19 @@ You can use either **Google AI Studio** (simplest) or **Vertex AI** (for GCP pro
 #### Option B: Vertex AI (GCP Project)
 
 1. Ensure you have the [gcloud CLI](https://cloud.google.com/sdk/docs/install) installed.
-2. Set your project ID in `.env`:
-   ```bash
-   GOOGLE_CLOUD_PROJECT="your-project-id"
-   # Optional: default is us-central1
-   # GOOGLE_CLOUD_LOCATION="us-central1"
-   ```
-3. Authenticate with Application Default Credentials (ADC):
+2. Authenticate with Application Default Credentials (ADC):
    ```bash
    gcloud auth application-default login
    ```
-   _Note: If both are set, Vertex AI configuration takes precedence._
+3. **Configuration**: You MUST explicitly configure your project in `config.yaml` (Environment variables are not supported for Vertex AI project ID).
+
+   ```yaml
+   # config.yaml
+   google_cloud_project: "your-project-id"
+   google_cloud_location: "us-central1"
+   ```
+
+> [!IMPORTANT] > **Vertex AI Batch Limitation**: The `gemini-embedding-001` model does **not** support batch inference on Vertex AI. If using Vertex AI, you must either use AI Studio or switch to a supported model like `text-embedding-004`. See the [official documentation](https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-text-embeddings#batch_predictions) for details.
 
 You can configure the application using a `config.yaml` file in the project directory or at `~/.config/pdforganizer/config.yaml`.
 
@@ -219,26 +211,29 @@ Common settings to override:
 
 ```bash
 # Analyze a single file
-python3 -m pdforganizer.analyzer --file /path/to/invoice.pdf
+uv run python -m pdforganizer.analyzer --file /path/to/invoice.pdf
 
 # Analyze and interactively apply changes (y/n/e)
-python3 -m pdforganizer.analyzer --file /path/to/invoice.pdf --apply
+uv run python -m pdforganizer.analyzer --file /path/to/invoice.pdf --apply
 # 'e' allows you to edit the destination path manually.
 
 # Automatically move if confidence > 94%
-python3 -m pdforganizer.analyzer --file /path/to/invoice.pdf --auto-apply
+uv run python -m pdforganizer.analyzer --file /path/to/invoice.pdf --auto-apply
 ```
 
 ### 2. Indexer (Batch Processor)
 
 Scan your document library and index all PDFs into ChromaDB.
 
+> [!NOTE]
+> When using Vertex AI, ensure you are using a model that supports [batch prediction](https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-text-embeddings#batch_predictions). Note that `gemini-embedding-001` is [not supported](https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-text-embeddings#batch_predictions) for batching on Vertex.
+
 ```bash
 # Index default directory
-python -m pdforganizer.indexer
+uv run python -m pdforganizer.indexer
 
 # Index specific directory with larger batch size
-python -m pdforganizer.indexer --docs-base-dir /path/to/docs --batch-size 50
+uv run python -m pdforganizer.indexer --docs-base-dir /path/to/docs --batch-size 50
 ```
 
 ### 3. OCR Tool
@@ -246,7 +241,7 @@ python -m pdforganizer.indexer --docs-base-dir /path/to/docs --batch-size 50
 Perform simple OCR on a file and output markdown.
 
 ```bash
-python -m pdforganizer.ocr_tool input.pdf -o output.md
+uv run python -m pdforganizer.ocr_tool input.pdf -o output.md
 ```
 
 ## Development
@@ -256,25 +251,25 @@ To set up the development environment with testing and linting tools:
 1.  **Install dev dependencies**:
 
     ```bash
-    uv pip install -e ".[dev]"
+    uv sync --extra dev
     ```
 
 2.  **Run tests**:
 
     ```bash
-    pytest
+    uv run pytest
     ```
 
 3.  **Type checking**:
 
     ```bash
-    mypy pdforganizer
+    uv run mypy pdforganizer
     ```
 
 4.  **Formatting**:
     ```bash
-    black .
-    isort .
+    uv run black .
+    uv run isort .
     ```
 
 ## Project Structure

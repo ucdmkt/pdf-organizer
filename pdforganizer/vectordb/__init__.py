@@ -48,7 +48,19 @@ class VectorDBClient(ABC):
         embeddings: Optional[List[List[float]]] = None,
         metadatas: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
-        """Insert or update records."""
+        """Insert or update records (requires content/embeddings for insert)."""
+        pass
+
+    @abstractmethod
+    def update(
+        self,
+        collection_name: str,
+        ids: List[str],
+        documents: Optional[List[str]] = None,
+        embeddings: Optional[List[List[float]]] = None,
+        metadatas: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        """Update existing records (can take partial updates)."""
         pass
 
     @abstractmethod
