@@ -37,8 +37,8 @@ class AppConfig(BaseModel):
         description="GCP Location for Vertex AI (default: us-central1).",
     )
     # --- MODEL CONFIG ---
-    ocr_model_id: str = "models/gemini-2.5-flash-lite"
-    analyzer_model_id: str = "models/gemini-3-flash-preview"
+    ocr_model_id: str = "models/gemini-3.1-flash-lite"
+    analyzer_model_id: str = "models/gemini-3.1-flash-lite"
     embed_model_id: str = "models/gemini-embedding-001"
     embed_dimension: int = 768
 

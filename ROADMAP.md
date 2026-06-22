@@ -34,3 +34,15 @@
 - [ ] **Ollama Support**
   - Implement support for local models via **Ollama** (e.g., Llama 3, Mistral) for Analyzer logic.
   - Support local embeddings (e.g., `nomic-embed-text`).
+
+## 🖼️ Priority 4: Multimodal Embedding Upgrade (`gemini-embedding-2`)
+
+- [ ] **Transition to Multimodal Embeddings**
+  - Upgrade `embed_model_id` to `models/gemini-embedding-2` in settings.
+  - Implement direct PDF/image upload and embedding request generation in `utils/genai.py` (sending the original file/image structure instead of OCR'ed text).
+- [ ] **Database Re-indexing Pipeline**
+  - Add a CLI utility or option (`--reindex-all`) to clear the existing vector database collection and regenerate all embeddings from the original source files.
+  - Preserve cached OCR text in the database to avoid re-performing OCR during embedding regeneration.
+- [ ] **Validation & Evaluation**
+  - Verify Vertex AI Batch API compatibility with `gemini-embedding-2`.
+  - Evaluate retrieval accuracy gains from layout-aware visual embeddings vs. legacy text-only embeddings.
