@@ -69,11 +69,12 @@ class TestConfig:
         cfg = config.load_config(Path("/non/existent"))
         assert cfg.google_api_key == "TEST_KEY"
 
-    def test_vertex_config_loading(self, clean_env):
-        """Test GCP Project loading from environment."""
+    def test_vertex_config_no_env_fallback(self, clean_env):
+        """Test that GCP Project ID does NOT load from environment."""
         os.environ["GOOGLE_CLOUD_PROJECT"] = "my-gcp-project"
         cfg = config.load_config(Path("/non/existent"))
-        assert cfg.google_cloud_project == "my-gcp-project"
+        # Per config.py:86, we do NOT fallback to env var for project ID.
+        assert cfg.google_cloud_project is None
         assert cfg.google_cloud_location == "us-central1"
 
     def test_cwd_loading(self, clean_env, tmp_path, monkeypatch):

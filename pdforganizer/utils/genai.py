@@ -19,25 +19,30 @@ OCR_PROMPT = (
 )
 
 
+def _upload_file_ai_studio(client, path_obj, mime_type, logger):
+    """
+    Handles file upload for AI Studio (File API).
+    """
+    with open(path_obj, "rb") as f:
+        return retry_with_backoff(logger)(client.files.upload)(
+            file=f,
+            config=types.UploadFileConfig(
+                mime_type=mime_type, display_name=path_obj.name
+            ),
+        )
+
+
 def upload_file(client, path_obj, logger, doc_id="unknown", rel_path="unknown"):
     """
-    Uploads a file to Gemini using a binary stream directly from disk.
-    This is memory-efficient and avoids header encoding issues for non-ASCII filenames.
+    Uploads a file for GenAI processing.
+    Delegates to appropriate backend strategy (Vertex vs AI Studio).
     """
     try:
         mime_type, _ = mimetypes.guess_type(path_obj)
         if not mime_type:
-            mime_type = "application/pdf"  # Default fallback
+            mime_type = "application/pdf"
 
-        with open(path_obj, "rb") as f:
-            # We explicitly provide the display_name to ensure non-ASCII characters
-            # are preserved in Gemini's system without breaking HTTP headers.
-            return retry_with_backoff(logger)(client.files.upload)(
-                file=f,
-                config=types.UploadFileConfig(
-                    mime_type=mime_type, display_name=path_obj.name
-                ),
-            )
+        return _upload_file_ai_studio(client, path_obj, mime_type, logger)
     except Exception:
         logger.error(
             "❌ Failed to upload document",
@@ -63,17 +68,21 @@ def ocr_document(client, path_obj, logger, doc_id="unknown", rel_path="unknown")
         if not uploaded_file:
             return None
 
-        time.sleep(1)  # Allow for processing on the server
+        try:
+            time.sleep(1)  # Allow for processing on the server
 
-        response = retry_with_backoff(logger)(client.models.generate_content)(
-            **build_ocr_request(uploaded_file)
-        )
+            response = retry_with_backoff(logger)(client.models.generate_content)(
+                **build_ocr_request(uploaded_file)
+            )
 
-        text = response.text
-        if text:
-            text = clean_ocr_text(text)
+            text = response.text
+            if text:
+                text = clean_ocr_text(text)
 
-        return text
+            return text
+        finally:
+            pass
+
     except Exception:
         logger.error(
             "❌ Failed to process document",
@@ -115,6 +124,36 @@ def build_ocr_request(uploaded_file):
         "model": config.SETTINGS.ocr_model_id,
         "contents": [uploaded_file, OCR_PROMPT],
     }
+
+
+def build_batch_ocr_request(uploaded_file, doc_id):
+    """
+    Constructs the batch request entry for OCR.
+    Returns (jsonl_line_dict, file_uri) or (None, None) on error.
+    """
+    if not uploaded_file:
+        return None, None
+
+    uri = getattr(uploaded_file, "uri", None)
+    if not uri:
+        return None, None
+
+    file_part = {
+        "file_data": {
+            "file_uri": uri,
+            "mime_type": getattr(uploaded_file, "mime_type", "application/pdf"),
+        }
+    }
+
+    text_part = {"text": OCR_PROMPT}
+
+    # Construct strict request payload
+    req_clean = {
+        "contents": [{"role": "user", "parts": [file_part, text_part]}],
+    }
+
+    jsonl_line = {"custom_id": doc_id, "request": req_clean}
+    return jsonl_line, uri
 
 
 def get_embedding_params(task_type="RETRIEVAL_DOCUMENT"):

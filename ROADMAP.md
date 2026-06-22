@@ -1,5 +1,15 @@
 # Roadmap
 
+## ⚠️ Known Constraints
+
+- **Vertex AI Batch Embedding Support**: The `gemini-embedding-001` model is **not supported** by the Vertex AI Batch API (returns `404 NOT_FOUND`). See [official documentation](https://cloud.google.com/vertex-ai/docs/generative-ai/embeddings/get-text-embeddings#batch_predictions).
+  - **Constraint**: The project requires `gemini-embedding-001` for embedding (due to vector compatibility or hard requirement).
+  - **Blocker**: This creates a hard blocker for running Batch Embeddings on Vertex AI with this model.
+  - **Workarounds Explored**:
+    - Switching model to `text-embedding-004` (works but rejected by user requirements).
+    - Online Fallback (works functionally but rejected due to architectural preferences/revert request).
+  - **Resolution**: Vertex AI Batch mode is currently incompatible with `gemini-embedding-001`. Use AI Studio or a supported model like `text-embedding-004` if requirements change.
+
 ## 🚀 Priority 1: Remote ChromaDB Support
 
 - [ ] **Remote Client Implementation**

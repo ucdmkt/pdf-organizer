@@ -40,6 +40,22 @@ class ChromaDBClient(VectorDBClient):
             metadatas=cast(Any, metadatas),
         )
 
+    def update(
+        self,
+        collection_name: str,
+        ids: List[str],
+        documents: Optional[List[str]] = None,
+        embeddings: Optional[List[List[float]]] = None,
+        metadatas: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        collection = self._client.get_collection(name=collection_name)
+        collection.update(
+            ids=ids,
+            documents=documents,
+            embeddings=cast(Any, embeddings),
+            metadatas=cast(Any, metadatas),
+        )
+
     def query(
         self,
         collection_name: str,

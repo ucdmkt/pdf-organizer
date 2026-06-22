@@ -1,14 +1,16 @@
 # pdforganizer Configuration Template
 # Copy this file to `config.yaml` or `~/.config/pdforganizer/config.yaml`.
 
-# --- API Keys ---
+# --- Authentication (Choose One) ---
+# Option 1: API Key (Google AI Studio)
 # google_api_key: "YOUR_API_KEY"
-# Recommended: Leave this commented out and use the GOOGLE_API_KEY environment variable.
-#
-# --- Vertex AI (GCP) ---
+# Recommended: Use GOOGLE_API_KEY environment variable.
+
+# Option 2: Vertex AI (GCP)
+# Uncomment these to use Vertex AI instead of AI Studio.
 # google_cloud_project: "YOUR_PROJECT_ID"
 # google_cloud_location: "us-central1"
-# Recommended: Leave project commented and use GOOGLE_CLOUD_PROJECT env var.
+# NOTE: Explicit config in YAML is required for Vertex AI project ID.
 
 # --- Models ---
 # The Gemini model ID to use for OCR (image-to-text).
@@ -18,6 +20,8 @@ ocr_model_id: "models/gemini-2.5-flash-lite"
 analyzer_model_id: "models/gemini-3-flash-preview"
 
 # The Gemini model ID to use for generating vector embeddings.
+# NOTE: gemini-embedding-001 does NOT support Batch jobs on Vertex AI.
+# If using Vertex AI Batch, consider text-embedding-004 instead.
 embed_model_id: "models/gemini-embedding-001"
 
 # Dimension size for the embedding model (must match the model's output).

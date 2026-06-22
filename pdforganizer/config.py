@@ -36,7 +36,6 @@ class AppConfig(BaseModel):
         default="us-central1",
         description="GCP Location for Vertex AI (default: us-central1).",
     )
-
     # --- MODEL CONFIG ---
     ocr_model_id: str = "models/gemini-2.5-flash-lite"
     analyzer_model_id: str = "models/gemini-3-flash-preview"
@@ -80,9 +79,9 @@ class AppConfig(BaseModel):
 
         # 1. Load Credentials from Env if not provided
         if not self.google_cloud_project:
-            object.__setattr__(
-                self, "google_cloud_project", os.environ.get("GOOGLE_CLOUD_PROJECT")
-            )
+            # User policy: Vertex AI config must be explicit in yaml.
+            # We do NOT fallback to env var for project ID.
+            pass
 
         if not self.google_api_key:
             object.__setattr__(self, "google_api_key", os.environ.get("GOOGLE_API_KEY"))

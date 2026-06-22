@@ -2,6 +2,7 @@
 
 import argparse
 import fnmatch
+import hashlib
 import json
 import tempfile
 import time
@@ -66,6 +67,9 @@ def _scan_and_sync_files(docs_base_path, vector_db, seen_ids_accumulator):
 
     # Recursive scan for all PDF files
     for full_path_obj in docs_base_path.rglob("*.pdf"):
+        if not full_path_obj.is_file():
+            continue
+
         # Calculate relative path string
         try:
             rel_path = str(full_path_obj.relative_to(docs_base_path))
@@ -100,7 +104,7 @@ def _scan_and_sync_files(docs_base_path, vector_db, seen_ids_accumulator):
                     )
                     existing_meta["rel_path"] = rel_path
                     existing_meta["filename"] = full_path_obj.name
-                    vector_db.upsert(
+                    vector_db.update(
                         collection_name=config.SETTINGS.collection_name,
                         ids=[doc_id],
                         metadatas=[existing_meta],
@@ -120,23 +124,62 @@ def _scan_and_sync_files(docs_base_path, vector_db, seen_ids_accumulator):
             LOGGER.error(f"❌ Failed to process file {rel_path}: {e}")
 
 
-def _save_batch_state(state):
+def _compute_config_hash():
+    """Computes MD5 hash of the entire AppConfig."""
+    # Use model_dump to get a dict, then json dumps with sort_keys for stability
+    # mode='json' converts Paths to strings etc.
+    config_dict = config.SETTINGS.model_dump(mode="json")
+
+    data_str = json.dumps(config_dict, sort_keys=True)
+    return hashlib.md5(data_str.encode("utf-8")).hexdigest()
+
+
+def _save_batch_state(state, merge=False):
     """Saves the current batch state to a predictable file location."""
     config.SETTINGS.batch_state_file.parent.mkdir(parents=True, exist_ok=True)
+
+    final_state = state
+    if merge and config.SETTINGS.batch_state_file.exists():
+        try:
+            existing = _load_batch_state()
+            if existing:
+                final_state = existing.copy()
+                final_state.update(state)
+        except Exception:
+            pass
+
+    # Always inject current config hash
+    final_state["config_hash"] = _compute_config_hash()
+
     with open(config.SETTINGS.batch_state_file, "w", encoding="utf-8") as f:
         # Convert Path objects to strings for JSON serialization
-        serializable_metadata = [[m[0], str(m[1])] for m in state.get("metadata", [])]
-        state_copy = state.copy()
+        serializable_metadata = [
+            [m[0], str(m[1])] for m in final_state.get("metadata", [])
+        ]
+        state_copy = final_state.copy()
         state_copy["metadata"] = serializable_metadata
         json.dump(state_copy, f, indent=2)
 
 
 def _load_batch_state():
-    """Loads the batch state if it exists."""
+    """Loads the batch state if it exists and configuration matches."""
     if config.SETTINGS.batch_state_file.exists():
         try:
             with open(config.SETTINGS.batch_state_file, "r", encoding="utf-8") as f:
                 state = json.load(f)
+
+                # Check Config Hash
+                current_hash = _compute_config_hash()
+                saved_hash = state.get("config_hash")
+
+                if saved_hash != current_hash:
+                    LOGGER.warning(
+                        "⚠️ Config changed since last run. "
+                        "Invalidating saved batch state."
+                    )
+                    _clear_batch_state()
+                    return None
+
                 # Convert strings back to Path objects
                 state["metadata"] = [
                     [m[0], Path(m[1])] for m in state.get("metadata", [])
@@ -185,50 +228,26 @@ def _manage_ocr_phase(client, chunk_files):
     doc_ids = [cf[0] for cf in chunk_files]
     path_objs = [cf[1] for cf in chunk_files]
 
-    # Calculate rel_paths for logging context
-    # We need to access docs_base_path which is not passed here directly,
-    # but we can infer or pass it.
-    # Actually, in _scan_and_sync_files we calculate rel_path.
-    # Let's simple pass rel_path in chunk_files to be cleaner?
-    # For now, let's just use path_objs.name as fallback if strict rel_path
-    # isn't available. But wait, we want standard logging.
-    # Let's rely on the fact that doc_id HAS the hash, and upload_file takes doc_id.
+    # Calculate rel_paths for logging context (using path objects directly)
 
-    LOGGER.info(f"📦 Preparing chunk of {len(chunk_files)} files...")
+    # 1. Parallel Upload
+    uploaded_files = utils.genai.batch_upload_file(client, path_objs, doc_ids, LOGGER)
 
-    # Update batch_upload_file to accept doc_ids
-    uploaded_files = utils.batch_upload_file(client, path_objs, doc_ids, LOGGER)
-
-    batch_metadata = []
+    # Collect lines and metadata
     jsonl_lines = []
+    batch_metadata = []
 
     for doc_id, full_path_obj, uploaded_file in zip(doc_ids, path_objs, uploaded_files):
-        if not uploaded_file:
-            LOGGER.error("❌ Upload failed, skipping", extra={"doc_id": doc_id})
+        jsonl_line, _ = utils.genai.build_batch_ocr_request(uploaded_file, doc_id)
+
+        if not jsonl_line:
+            LOGGER.error(
+                f"❌ Could not build batch request for {doc_id} "
+                "(Upload failed or invalid mode)",
+                extra={"doc_id": doc_id},
+            )
             continue
 
-        # Build request body
-        # utils.genai.build_ocr_request returns convenient SDK format:
-        # {'contents': [file_obj, prompt_str]}
-        # We need to convert this to strict JSON for the batch file.
-        # Structure: "contents":
-        # [{"role": "user", "parts": [{"file_data": ...}, {"text": ...}]}]
-
-        file_part = {
-            "file_data": {
-                "file_uri": uploaded_file.uri,
-                "mime_type": uploaded_file.mime_type,
-            }
-        }
-        text_part = {"text": utils.genai.OCR_PROMPT}
-
-        # Construct strict request payload
-        req_clean = {
-            "contents": [{"role": "user", "parts": [file_part, text_part]}],
-            # Add generation config if needed, etc.
-        }
-
-        jsonl_line = {"custom_id": doc_id, "request": req_clean}
         jsonl_lines.append(json.dumps(jsonl_line))
         batch_metadata.append((doc_id, full_path_obj))
 
@@ -244,13 +263,14 @@ def _manage_ocr_phase(client, chunk_files):
         tmp_f.write("\n".join(jsonl_lines))
         tmp_f.flush()
 
-        upload_ref = utils.retry_with_backoff(LOGGER)(client.files.upload)(
+        upload_file = utils.retry_with_backoff(LOGGER)(client.files.upload)(
             file=Path(tmp_f.name), config={"mime_type": "application/json"}
         )
+        upload_ref = types.BatchJobSource(file_name=upload_file.name)
 
     batch_job = utils.retry_with_backoff(LOGGER)(client.batches.create)(
         model=config.SETTINGS.ocr_model_id,
-        src=types.BatchJobSource(file_name=upload_ref.name),
+        src=upload_ref,
     )
     job_id = batch_job.name
     job_type = "OCR"
@@ -275,6 +295,7 @@ def _wait_for_ocr_and_extract(client, job_id, batch_metadata):
     try:
         output_file_name = batch_job.dest.file_name
         results_list = []
+
         if output_file_name:
             content_resp = client.files.download(file=output_file_name)
             jsonl_content = content_resp.decode("utf-8")
@@ -365,6 +386,8 @@ def _wait_for_ocr_and_extract(client, job_id, batch_metadata):
     except Exception as e:
         LOGGER.error(f"❌ Failed to process OCR results: {e}", exc_info=True)
         return []
+    finally:
+        pass
 
 
 def _manage_embedding_phase(client, valid_map, batch_metadata):
@@ -382,6 +405,7 @@ def _manage_embedding_phase(client, valid_map, batch_metadata):
         jsonl_lines.append(json.dumps(line))
 
     try:
+        # AI Studio Mode: Use File API with create_embeddings helper
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".jsonl", delete=True, encoding="utf-8"
         ) as tmp_f:
@@ -390,11 +414,13 @@ def _manage_embedding_phase(client, valid_map, batch_metadata):
             upload_ref = utils.retry_with_backoff(LOGGER)(client.files.upload)(
                 file=Path(tmp_f.name), config={"mime_type": "application/json"}
             )
+        src = types.EmbeddingsBatchJobSource(file_name=upload_ref.name)
 
         embed_job = utils.retry_with_backoff(LOGGER)(client.batches.create_embeddings)(
             model=config.SETTINGS.embed_model_id,
-            src=types.EmbeddingsBatchJobSource(file_name=upload_ref.name),
+            src=src,
         )
+
         job_id = embed_job.name
 
         # Save valid_map related info so we can reconstruct it on resume
@@ -421,6 +447,7 @@ def _wait_for_embedding_and_index(
 ):
     """Waits for Embedding job and finalizes indexing using ID mapping."""
     embed_job = _poll_job(client, job_id, interval=5)
+
     LOGGER.info("✅ Embedding Batch Job Completed! Finalizing indexing...")
 
     # Create lookup map
@@ -429,6 +456,7 @@ def _wait_for_embedding_and_index(
     try:
         emb_output_name = embed_job.dest.file_name
         emb_results_list = []
+
         if emb_output_name:
             emb_content_resp = client.files.download(file=emb_output_name)
             emb_jsonl = emb_content_resp.decode("utf-8")

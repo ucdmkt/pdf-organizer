@@ -39,6 +39,7 @@ class TestIndexer:
         with (
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
             patch("pathlib.Path.rglob", return_value=[file_path]),
             patch("pdforganizer.utils.generic.compute_file_hash", return_value="123"),
             patch("pathlib.Path.relative_to", return_value=Path("new/path.pdf")),
@@ -55,6 +56,6 @@ class TestIndexer:
             assert "file_content_hash:123" in seen_ids
 
             # Verify update was called
-            self.mock_vector_db.upsert.assert_called()
-            call_args = self.mock_vector_db.upsert.call_args
+            self.mock_vector_db.update.assert_called()
+            call_args = self.mock_vector_db.update.call_args
             assert call_args.kwargs["metadatas"][0]["rel_path"] == "new/path.pdf"
