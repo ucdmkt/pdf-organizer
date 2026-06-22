@@ -32,8 +32,8 @@ class TestConfig:
 
         assert cfg.ret_max_neighbors == 7
         assert "unconfident/**" in cfg.retrieval_blocklist
-        assert cfg.analyzer_model_id == "models/gemini-3-flash-preview"
-        assert cfg.ocr_model_id == "models/gemini-2.5-flash-lite"
+        assert cfg.analyzer_model_id == "models/gemini-3.1-flash-lite"
+        assert cfg.ocr_model_id == "models/gemini-3.1-flash-lite"
         # Confirm no hardcoded fallback
         assert cfg.google_api_key is None
         assert cfg.google_cloud_project is None
